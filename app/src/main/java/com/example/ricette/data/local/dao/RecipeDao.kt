@@ -49,6 +49,25 @@ interface RecipeDao {
     )
     fun getIngredientsForRecipe(recipeId: Long): Flow<List<RecipeIngredientWithDetails>>
 
+    @Query(
+        """
+        SELECT 
+            ri.recipeId, 
+            ri.foodItemId, 
+            ri.amountInGrams, 
+            fi.name, 
+            fi.kcalPer100g, 
+            fi.carbsPer100g, 
+            fi.proteinPer100g, 
+            fi.fatPer100g, 
+            fi.isDairyFree, 
+            fi.isGlutenFree 
+        FROM recipe_ingredients ri
+        INNER JOIN food_items fi ON ri.foodItemId = fi.id
+        """
+    )
+    fun getAllRecipeIngredients(): Flow<List<RecipeIngredientWithDetails>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRecipeIngredient(recipeIngredient: RecipeIngredientEntity)
 

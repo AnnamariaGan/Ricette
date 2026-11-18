@@ -28,6 +28,21 @@ class RecipeRepositoryImpl @Inject constructor(
         }
     }
 
+    override fun getAllRecipesWithIngredients(): Flow<List<RecipeWithIngredients>> {
+        return combine(
+            recipeDao.getAllRecipes(),
+            recipeDao.getAllRecipeIngredients()
+        ) { recipes, ingredients ->
+            val ingredientsByRecipe = ingredients.groupBy { it.recipeId }
+            recipes.map { recipeEntity ->
+                RecipeWithIngredients(
+                    recipe = recipeEntity.toDomain(),
+                    ingredients = ingredientsByRecipe[recipeEntity.id]?.map { it.toDomain() } ?: emptyList()
+                )
+            }
+        }
+    }
+
     override fun getRecipeById(id: Long): Flow<Recipe?> {
         return recipeDao.getRecipeById(id).map { it?.toDomain() }
     }

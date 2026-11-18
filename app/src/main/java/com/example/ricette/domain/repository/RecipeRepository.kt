@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface RecipeRepository {
     fun getAllRecipes(): Flow<List<Recipe>>
+    fun getAllRecipesWithIngredients(): Flow<List<RecipeWithIngredients>>
     fun getRecipeById(id: Long): Flow<Recipe?>
     fun getRecipeWithIngredients(recipeId: Long): Flow<RecipeWithIngredients?>
     
