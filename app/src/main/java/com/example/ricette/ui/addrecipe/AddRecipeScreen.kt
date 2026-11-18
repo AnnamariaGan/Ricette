@@ -37,6 +37,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -220,13 +221,15 @@ fun AddRecipeScreen(
                                     )
                                 }
 
+                                val isBakingCat = uiState.category.equals("Panificazione", true) || uiState.category.equals("Lievitati", true) || uiState.category.equals("Dolci", true) || uiState.category.equals("Pasticceria", true)
+                                val displayUnit = if (isBakingCat) "g" else item.foodItem.unitLabel
                                 OutlinedTextField(
                                     value = item.amountInGramsInput,
                                     onValueChange = { viewModel.onIngredientGramsChange(item.foodItem.id, it) },
-                                    label = { Text("Grammi") },
+                                    label = { Text(if (displayUnit == "g") "Grammi" else "Quantità") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    suffix = { Text("g") },
-                                    modifier = Modifier.width(110.dp),
+                                    suffix = { Text(displayUnit) },
+                                    modifier = Modifier.width(125.dp),
                                     singleLine = true
                                 )
 
@@ -243,25 +246,59 @@ fun AddRecipeScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    var ingredientQuery by remember { mutableStateOf("") }
+                    val matchingItems = remember(ingredientQuery, uiState.availableFoodItems, uiState.selectedIngredients) {
+                        val q = ingredientQuery.trim()
+                        if (q.isEmpty()) emptyList()
+                        else uiState.availableFoodItems.filter { item ->
+                            item.name.contains(q, ignoreCase = true) && uiState.selectedIngredients.none { it.foodItem.id == item.id }
+                        }.take(5)
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = ingredientQuery,
+                            onValueChange = { ingredientQuery = it },
+                            label = { Text("Aggiungi ingrediente") },
+                            placeholder = { Text("Es. Farina, Uova, Zucchero...") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
                         FilledTonalButton(
-                            onClick = { viewModel.openIngredientPicker() },
-                            modifier = Modifier.weight(1f)
+                            onClick = {
+                                if (ingredientQuery.isNotBlank()) {
+                                    viewModel.addOrCreateIngredient(ingredientQuery)
+                                    ingredientQuery = ""
+                                }
+                            },
+                            enabled = ingredientQuery.isNotBlank()
                         ) {
                             Icon(Icons.Default.Add, contentDescription = null)
                             Spacer(Modifier.width(4.dp))
-                            Text("Scegli Esistente")
+                            Text("Aggiungi")
                         }
-
-                        OutlinedButton(
-                            onClick = { viewModel.openCreateFoodItemDialog() },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("+ Nuovo Alimento")
+                    }
+                    if (matchingItems.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            matchingItems.forEach { suggestion ->
+                                Surface(
+                                    onClick = { viewModel.addIngredient(suggestion); ingredientQuery = "" },
+                                    shape = MaterialTheme.shapes.small,
+                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                        Text(suggestion.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                                        Text(if (suggestion.kcalPer100g > 0) "${suggestion.kcalPer100g.toInt()} kcal/100g" else "In dispensa", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
                         }
+                    } else if (ingredientQuery.trim().length >= 2) {
+                        Text(
+                            text = "Premi Aggiungi per creare ${ingredientQuery.trim()} automaticamente.",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
@@ -345,7 +382,7 @@ private fun CategoryDropdown(
     category: String,
     onCategoryChange: (String) -> Unit
 ) {
-    val categories = listOf("Panificazione", "Primi Piatti", "Secondi Piatti", "Lievitati", "Dolci", "Contorni", "Altro")
+    val categories = listOf("Panificazione", "Primi Piatti", "Secondi Piatti", "Lievitati", "Pasticceria", "Dolci", "Contorni", "Altro")
     var expanded by remember { mutableStateOf(false) }
 
     ExposedDropdownMenuBox(

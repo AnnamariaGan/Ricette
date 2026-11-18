@@ -1,11 +1,15 @@
 package com.example.ricette.ui.theme
-
 import androidx.compose.ui.graphics.Color
-
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
-
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+val TerracottaPrimary = Color(0xFFB54A24)
+val TerracottaLight = Color(0xFFFFB59D)
+val OnTerracotta = Color(0xFFFFFFFF)
+val TerracottaContainer = Color(0xFFFFDBD0)
+val OnTerracottaContainer = Color(0xFF3A0B00)
+val SageSecondary = Color(0xFF3B664C)
+val SageLight = Color(0xFFA1D1B1)
+val SageContainer = Color(0xFFBDEECB)
+val OnSageContainer = Color(0xFF00210E)
+val WarmBackground = Color(0xFFFFFBF7)
+val WarmSurfaceContainer = Color(0xFFF6EFE6)
+val WarmDarkBackground = Color(0xFF1A120E)
+val WarmDarkSurface = Color(0xFF261C17)

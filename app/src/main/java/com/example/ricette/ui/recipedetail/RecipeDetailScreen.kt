@@ -42,7 +42,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import android.app.Activity
+import android.view.WindowManager
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextDecoration
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -60,6 +73,15 @@ fun RecipeDetailScreen(
     viewModel: RecipeDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var isCookingMode by remember { mutableStateOf(false) }
+    val checkedIngredients = remember { mutableStateMapOf<Long, Boolean>() }
+    val checkedSteps = remember { mutableStateMapOf<Int, Boolean>() }
+    val ctx = LocalContext.current
+    DisposableEffect(isCookingMode) {
+        val w = (ctx as? Activity)?.window
+        if (isCookingMode) w?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { w?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
 
     Scaffold(
         topBar = {
@@ -115,22 +137,18 @@ fun RecipeDetailScreen(
                         .padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    // Header badges
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        AssistChip(
-                            onClick = {},
-                            label = { Text("📁 ${recipe.category}") }
-                        )
-                        Text(
-                            text = "⏱️ ${recipe.prepTimeMinutes} min",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        AssistChip(onClick = {}, label = { Text(recipe.category) })
+                        FilledTonalButton(onClick = { isCookingMode = !isCookingMode }) {
+                            Text(if (isCookingMode) "Esci Modalita Cucina" else "Modalita Cucina")
+                        }
+                    }
+                    if (isCookingMode) {
+                        CookingTimerCard(defaultMinutes = recipe.prepTimeMinutes.coerceAtLeast(1))
                     }
 
                     // Macro summary card
@@ -153,28 +171,20 @@ fun RecipeDetailScreen(
                         onTargetWeightChange = { viewModel.updateTargetIngredientWeight(it) }
                     )
 
-                    // Ingredients list card
-                    IngredientsCard(ingredients = uiState.scaledIngredients)
-
-                    // Instructions card
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "Istruzioni",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = recipe.instructions,
-                                style = MaterialTheme.typography.bodyMedium,
-                                lineHeight = MaterialTheme.typography.bodyLarge.lineHeight
-                            )
-                        }
-                    }
+                    val isBaking = recipe.category.equals("Panificazione", true) ||
+                        recipe.category.equals("Lievitati", true) ||
+                        recipe.category.equals("Dolci", true) || recipe.category.equals("Pasticceria", true)
+                    IngredientsCard(
+                        ingredients = uiState.scaledIngredients,
+                        checkedMap = checkedIngredients,
+                        forceGrams = isBaking,
+                        onToggleCheck = { id -> checkedIngredients[id] = !(checkedIngredients[id] ?: false) }
+                    )
+                    InteractiveInstructionsCard(
+                        instructions = recipe.instructions,
+                        checkedSteps = checkedSteps,
+                        onToggleStep = { idx -> checkedSteps[idx] = !(checkedSteps[idx] ?: false) }
+                    )
 
                     // Personal notes card (if present)
                     if (recipe.personalNotes.isNotBlank()) {
@@ -370,63 +380,94 @@ private fun ScalingControlCard(
 }
 
 @Composable
-private fun IngredientsCard(ingredients: List<ScaledIngredient>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
+private fun IngredientsCard(
+    ingredients: List<ScaledIngredient>,
+    checkedMap: Map<Long, Boolean>,
+    forceGrams: Boolean,
+    onToggleCheck: (Long) -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Ingredienti",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Ingredienti", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("Tocca per spuntare", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Spacer(modifier = Modifier.height(8.dp))
-
             ingredients.forEach { ingredient ->
+                val isChecked = checkedMap[ingredient.foodItem.id] == true
+                val amt = if (forceGrams || ingredient.foodItem.unitLabel == "g") {
+                    if (ingredient.amountInGrams % 1.0 == 0.0) "${ingredient.amountInGrams.toInt()} g" else "${ingredient.amountInGrams} g"
+                } else ingredient.foodItem.formatAmount(ingredient.amountInGrams)
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth().clickable { onToggleCheck(ingredient.foodItem.id) }.padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = isChecked, onCheckedChange = { onToggleCheck(ingredient.foodItem.id) })
                         Text(
                             text = ingredient.foodItem.name,
-                            style = MaterialTheme.typography.bodyLarge
+                            style = MaterialTheme.typography.bodyLarge,
+                            textDecoration = if (isChecked) TextDecoration.LineThrough else TextDecoration.None
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            if (ingredient.foodItem.isDairyFree) {
-                                Text(
-                                    text = "Dairy-Free",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.secondary
-                                )
-                            }
-                            if (ingredient.foodItem.isGlutenFree) {
-                                Text(
-                                    text = "Gluten-Free",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.tertiary
-                                )
-                            }
-                        }
                     }
-
-                    val formattedGrams = if (ingredient.amountInGrams % 1.0 == 0.0) {
-                        "${ingredient.amountInGrams.toInt()} g"
-                    } else {
-                        "${ingredient.amountInGrams} g"
-                    }
-
                     Text(
-                        text = formattedGrams,
+                        text = amt,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold,
+                        textDecoration = if (isChecked) TextDecoration.LineThrough else TextDecoration.None,
                         color = MaterialTheme.colorScheme.primary
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InteractiveInstructionsCard(instructions: String, checkedSteps: Map<Int, Boolean>, onToggleStep: (Int) -> Unit) {
+    val steps = remember(instructions) { instructions.lines().map { it.trim() }.filter { it.isNotEmpty() } }
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Procedimento Interattivo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("${steps.indices.count { checkedSteps[it] == true }}/${steps.size}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
+            steps.forEachIndexed { i, step ->
+                val done = checkedSteps[i] == true
+                Row(modifier = Modifier.fillMaxWidth().clickable { onToggleStep(i) }, verticalAlignment = Alignment.Top) {
+                    Checkbox(checked = done, onCheckedChange = { onToggleStep(i) })
+                    Text(step, style = MaterialTheme.typography.bodyMedium, textDecoration = if (done) TextDecoration.LineThrough else TextDecoration.None, modifier = Modifier.padding(top = 10.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CookingTimerCard(defaultMinutes: Int) {
+    var sec by remember { mutableIntStateOf(defaultMinutes * 60) }
+    var run by remember { mutableStateOf(false) }
+    LaunchedEffect(run, sec) {
+        if (run && sec > 0) { delay(1000L); sec -= 1; if (sec == 0) run = false }
+    }
+    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text("Timer Cucina (Schermo Attivo)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text("%02d:%02d".format(sec / 60, sec % 60), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { run = !run }) { Text(if (run) "Pausa" else "Avvia") }
+                    OutlinedButton(onClick = { run = false; sec = defaultMinutes * 60 }) { Text("Reset") }
+                }
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(-1, 1, 5, 10).forEach { d ->
+                    FilledTonalButton(onClick = { sec = (sec + d * 60).coerceAtLeast(0) }, modifier = Modifier.weight(1f)) {
+                        Text(if (d > 0) "+${d}m" else "${d}m")
+                    }
                 }
             }
         }

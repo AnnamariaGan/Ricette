@@ -20,7 +20,7 @@ import javax.inject.Inject
 
 data class RecipeIngredientDraft(
     val foodItem: FoodItem,
-    val amountInGramsInput: String = "100"
+    val amountInGramsInput: String = if (foodItem.unitLabel == "g") "100" else "1"
 )
 
 data class AddRecipeUiState(
@@ -94,6 +94,35 @@ class AddRecipeViewModel @Inject constructor(
 
     fun closeIngredientPicker() {
         _uiState.update { it.copy(isIngredientPickerOpen = false) }
+    }
+
+    fun addOrCreateIngredient(rawName: String) {
+        val cleanName = rawName.trim()
+        if (cleanName.isBlank()) return
+        val existing = _uiState.value.availableFoodItems.firstOrNull {
+            it.name.equals(cleanName, ignoreCase = true)
+        }
+        if (existing != null) {
+            addIngredient(existing)
+            return
+        }
+        viewModelScope.launch {
+            val newItem = FoodItem(
+                name = cleanName.replaceFirstChar { it.uppercase() },
+                kcalPer100g = 0.0,
+                carbsPer100g = 0.0,
+                proteinPer100g = 0.0,
+                fatPer100g = 0.0,
+                isDairyFree = true,
+                isGlutenFree = true
+            )
+            val newId = recipeRepository.insertFoodItem(newItem)
+            val saved = newItem.copy(id = newId)
+            _uiState.update { state ->
+                if (state.selectedIngredients.any { it.foodItem.id == saved.id }) state
+                else state.copy(selectedIngredients = state.selectedIngredients + RecipeIngredientDraft(foodItem = saved))
+            }
+        }
     }
 
     fun addIngredient(foodItem: FoodItem) {
@@ -216,8 +245,10 @@ class AddRecipeViewModel @Inject constructor(
         val prepTime = state.prepTimeInput.toIntOrNull() ?: 0
 
         val validIngredients = state.selectedIngredients.mapNotNull { item ->
-            val grams = item.amountInGramsInput.toDoubleOrNull()
-            if (grams != null && grams > 0) {
+            val raw = item.amountInGramsInput.toDoubleOrNull()
+            val isBaking = state.category.equals("Panificazione", true) || state.category.equals("Lievitati", true) || state.category.equals("Dolci", true) || state.category.equals("Pasticceria", true)
+            if (raw != null && raw > 0) {
+                val grams = if (isBaking || item.foodItem.unitLabel == "g") raw else raw * item.foodItem.gramsPerUnit
                 item.foodItem.id to grams
             } else null
         }

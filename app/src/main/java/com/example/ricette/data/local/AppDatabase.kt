@@ -14,7 +14,7 @@ import com.example.ricette.data.local.entity.RecipeIngredientEntity
         RecipeEntity::class,
         RecipeIngredientEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
