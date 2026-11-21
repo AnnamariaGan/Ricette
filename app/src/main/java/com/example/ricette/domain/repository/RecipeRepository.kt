@@ -18,6 +18,7 @@ interface RecipeRepository {
 
     suspend fun insertRecipe(recipe: Recipe): Long
     suspend fun updateRecipe(recipe: Recipe)
+    suspend fun updateFavoriteStatus(recipeId: Long, isFavorite: Boolean)
     suspend fun deleteRecipe(recipe: Recipe)
 
     suspend fun insertFoodItem(foodItem: FoodItem): Long

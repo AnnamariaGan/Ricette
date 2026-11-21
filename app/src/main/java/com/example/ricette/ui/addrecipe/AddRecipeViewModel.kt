@@ -1,5 +1,6 @@
 package com.example.ricette.ui.addrecipe
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ricette.domain.model.FoodItem
@@ -14,9 +15,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlin.math.round
 
 data class RecipeIngredientDraft(
     val foodItem: FoodItem,
@@ -24,6 +27,7 @@ data class RecipeIngredientDraft(
 )
 
 data class AddRecipeUiState(
+    val isEditMode: Boolean = false,
     val title: String = "",
     val category: String = "Panificazione",
     val baseServingsInput: String = "4",
@@ -47,10 +51,16 @@ data class AddRecipeUiState(
 
 @HiltViewModel
 class AddRecipeViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
     private val recipeRepository: RecipeRepository
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(AddRecipeUiState())
+    private val recipeId: Long? = savedStateHandle.get<Long>("recipeId")?.takeIf { it > 0 }
+        ?: savedStateHandle.get<String>("recipeId")?.toLongOrNull()?.takeIf { it > 0 }
+
+    private var existingIsFavorite: Boolean = false
+
+    private val _uiState = MutableStateFlow(AddRecipeUiState(isEditMode = recipeId != null))
     val uiState: StateFlow<AddRecipeUiState> = _uiState.asStateFlow()
 
     private val _saveSuccessEvent = MutableSharedFlow<Unit>()
@@ -60,6 +70,46 @@ class AddRecipeViewModel @Inject constructor(
         viewModelScope.launch {
             recipeRepository.getAllFoodItems().collectLatest { items ->
                 _uiState.update { it.copy(availableFoodItems = items) }
+            }
+        }
+
+        if (recipeId != null) {
+            viewModelScope.launch {
+                val recipeWithIngredients = recipeRepository.getRecipeWithIngredients(recipeId).firstOrNull()
+                if (recipeWithIngredients != null) {
+                    val recipe = recipeWithIngredients.recipe
+                    existingIsFavorite = recipe.isFavorite
+                    val isBaking = recipe.category.equals("Panificazione", true) ||
+                        recipe.category.equals("Lievitati", true) ||
+                        recipe.category.equals("Dolci", true) ||
+                        recipe.category.equals("Pasticceria", true)
+
+                    val drafts = recipeWithIngredients.ingredients.map { ing ->
+                        val rawValue = if (isBaking || ing.foodItem.unitLabel == "g" || ing.foodItem.gramsPerUnit <= 0.0) {
+                            if (ing.amountInGrams % 1.0 == 0.0) ing.amountInGrams.toInt().toString() else ing.amountInGrams.toString()
+                        } else {
+                            val units = ing.amountInGrams / ing.foodItem.gramsPerUnit
+                            if (units % 1.0 == 0.0) units.toInt().toString() else (round(units * 10.0) / 10.0).toString()
+                        }
+                        RecipeIngredientDraft(
+                            foodItem = ing.foodItem,
+                            amountInGramsInput = rawValue
+                        )
+                    }
+
+                    _uiState.update {
+                        it.copy(
+                            isEditMode = true,
+                            title = recipe.title,
+                            category = recipe.category,
+                            baseServingsInput = recipe.baseServings.toString(),
+                            prepTimeInput = recipe.prepTimeMinutes.toString(),
+                            instructions = recipe.instructions,
+                            personalNotes = recipe.personalNotes,
+                            selectedIngredients = drafts
+                        )
+                    }
+                }
             }
         }
     }
@@ -261,25 +311,49 @@ class AddRecipeViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isSaving = true) }
 
-            val recipe = Recipe(
-                title = title,
-                category = state.category.ifBlank { "Altro" },
-                baseServings = baseServings,
-                prepTimeMinutes = prepTime,
-                instructions = state.instructions.trim(),
-                personalNotes = state.personalNotes.trim()
-            )
-
-            val recipeId = recipeRepository.insertRecipe(recipe)
-
-            validIngredients.forEach { (foodItemId, grams) ->
-                recipeRepository.addIngredientToRecipe(
-                    RecipeIngredient(
-                        recipeId = recipeId,
-                        foodItemId = foodItemId,
-                        amountInGrams = grams
-                    )
+            if (recipeId != null) {
+                val recipe = Recipe(
+                    id = recipeId,
+                    title = title,
+                    category = state.category.ifBlank { "Altro" },
+                    baseServings = baseServings,
+                    prepTimeMinutes = prepTime,
+                    instructions = state.instructions.trim(),
+                    personalNotes = state.personalNotes.trim(),
+                    isFavorite = existingIsFavorite
                 )
+                recipeRepository.updateRecipe(recipe)
+                recipeRepository.updateRecipeIngredients(
+                    recipeId = recipeId,
+                    ingredients = validIngredients.map { (foodItemId, grams) ->
+                        RecipeIngredient(
+                            recipeId = recipeId,
+                            foodItemId = foodItemId,
+                            amountInGrams = grams
+                        )
+                    }
+                )
+            } else {
+                val recipe = Recipe(
+                    title = title,
+                    category = state.category.ifBlank { "Altro" },
+                    baseServings = baseServings,
+                    prepTimeMinutes = prepTime,
+                    instructions = state.instructions.trim(),
+                    personalNotes = state.personalNotes.trim()
+                )
+
+                val newRecipeId = recipeRepository.insertRecipe(recipe)
+
+                validIngredients.forEach { (foodItemId, grams) ->
+                    recipeRepository.addIngredientToRecipe(
+                        RecipeIngredient(
+                            recipeId = newRecipeId,
+                            foodItemId = foodItemId,
+                            amountInGrams = grams
+                        )
+                    )
+                }
             }
 
             _saveSuccessEvent.emit(Unit)

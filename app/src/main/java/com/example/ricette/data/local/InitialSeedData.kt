@@ -1,7 +1,7 @@
 package com.example.ricette.data.local
 
 data class SeedItem(val id: Long, val name: String, val kcal: Double, val carbs: Double, val prot: Double, val fat: Double, val df: Boolean, val gf: Boolean, val unit: String = "g", val gPerUnit: Double = 1.0)
-data class SeedRecipe(val id: Long, val title: String, val cat: String, val serv: Int, val min: Int, val steps: String, val notes: String)
+data class SeedRecipe(val id: Long, val title: String, val cat: String, val serv: Int, val min: Int, val steps: String, val notes: String, val isFavorite: Boolean = false)
 data class SeedIng(val rId: Long, val fId: Long, val g: Double)
 
 object InitialSeedData {

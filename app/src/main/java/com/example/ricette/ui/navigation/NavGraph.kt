@@ -43,11 +43,29 @@ fun NavGraph(
             RecipeDetailScreen(
                 onBackClick = {
                     navController.popBackStack()
+                },
+                onEditClick = { recipeId ->
+                    navController.navigate(Screen.EditRecipe.createRoute(recipeId))
                 }
             )
         }
 
         composable(route = Screen.AddRecipe.route) {
+            AddRecipeScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(
+            route = Screen.EditRecipe.route,
+            arguments = listOf(
+                navArgument("recipeId") {
+                    type = NavType.LongType
+                }
+            )
+        ) {
             AddRecipeScreen(
                 onNavigateBack = {
                     navController.popBackStack()

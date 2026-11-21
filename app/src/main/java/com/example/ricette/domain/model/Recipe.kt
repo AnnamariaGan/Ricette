@@ -7,5 +7,6 @@ data class Recipe(
     val baseServings: Int,
     val prepTimeMinutes: Int,
     val instructions: String,
-    val personalNotes: String
+    val personalNotes: String,
+    val isFavorite: Boolean = false,
 )

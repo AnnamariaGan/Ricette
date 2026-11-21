@@ -13,7 +13,18 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
-    @Provides @Singleton fun provideDb(@ApplicationContext c: Context, cb: DatabaseCallback) = Room.databaseBuilder(c, AppDatabase::class.java, AppDatabase.DATABASE_NAME).fallbackToDestructiveMigration(true).addCallback(cb).build()
-    @Provides fun provideFoodDao(db: AppDatabase) = db.foodItemDao()
-    @Provides fun provideRecipeDao(db: AppDatabase) = db.recipeDao()
+    @Provides
+    @Singleton
+    fun provideDb(@ApplicationContext c: Context, cb: DatabaseCallback) =
+        Room.databaseBuilder(c, AppDatabase::class.java, AppDatabase.DATABASE_NAME)
+            .addMigrations(AppDatabase.MIGRATION_2_3)
+            .fallbackToDestructiveMigration(true)
+            .addCallback(cb)
+            .build()
+
+    @Provides
+    fun provideFoodDao(db: AppDatabase) = db.foodItemDao()
+
+    @Provides
+    fun provideRecipeDao(db: AppDatabase) = db.recipeDao()
 }

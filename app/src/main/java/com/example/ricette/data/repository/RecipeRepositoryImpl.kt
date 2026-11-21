@@ -85,6 +85,10 @@ class RecipeRepositoryImpl @Inject constructor(
         recipeDao.updateRecipe(RecipeEntity.fromDomain(recipe))
     }
 
+    override suspend fun updateFavoriteStatus(recipeId: Long, isFavorite: Boolean) {
+        recipeDao.updateFavoriteStatus(recipeId, isFavorite)
+    }
+
     override suspend fun deleteRecipe(recipe: Recipe) {
         recipeDao.deleteRecipe(RecipeEntity.fromDomain(recipe))
     }

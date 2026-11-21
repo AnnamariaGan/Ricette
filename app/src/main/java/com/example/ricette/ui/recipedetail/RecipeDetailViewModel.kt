@@ -56,41 +56,74 @@ class RecipeDetailViewModel @Inject constructor(
                 if (recipeWithIngredients != null) {
                     val recipe = recipeWithIngredients.recipe
                     val ingredients = recipeWithIngredients.ingredients
-                    val initialServings = recipe.baseServings
 
-                    // Pick default main ingredient (e.g. highest amount or first)
-                    val defaultMainIngredient = ingredients.maxByOrNull { it.amountInGrams }?.foodItem?.id
-                        ?: ingredients.firstOrNull()?.foodItem?.id
+                    if (_uiState.value.recipe == null) {
+                        val initialServings = recipe.baseServings
 
-                    val defaultWeight = ingredients.find { it.foodItem.id == defaultMainIngredient }?.amountInGrams ?: 0.0
+                        // Pick default main ingredient (e.g. highest amount or first)
+                        val defaultMainIngredient = ingredients.maxByOrNull { it.amountInGrams }?.foodItem?.id
+                            ?: ingredients.firstOrNull()?.foodItem?.id
 
-                    val initialScaled = scaleRecipeIngredientsUseCase.scaleByServings(
-                        ingredients = ingredients,
-                        baseServings = recipe.baseServings,
-                        targetServings = initialServings
-                    )
+                        val defaultWeight = ingredients.find { it.foodItem.id == defaultMainIngredient }?.amountInGrams ?: 0.0
 
-                    val initialMacros = calculateRecipeMacrosUseCase(
-                        ingredients = initialScaled.map {
-                            RecipeIngredientWithFoodItem(recipeId, it.foodItem, it.amountInGrams)
-                        },
-                        servings = initialServings
-                    )
-
-                    _uiState.update {
-                        it.copy(
-                            recipe = recipe,
-                            originalIngredients = ingredients,
-                            scaledIngredients = initialScaled,
-                            currentServings = initialServings,
-                            selectedMainIngredientId = defaultMainIngredient,
-                            targetIngredientWeightInput = if (defaultWeight > 0) defaultWeight.toInt().toString() else "",
-                            macros = initialMacros,
-                            isLoading = false
+                        val initialScaled = scaleRecipeIngredientsUseCase.scaleByServings(
+                            ingredients = ingredients,
+                            baseServings = recipe.baseServings,
+                            targetServings = initialServings
                         )
+
+                        val initialMacros = calculateRecipeMacrosUseCase(
+                            ingredients = initialScaled.map {
+                                RecipeIngredientWithFoodItem(recipeId, it.foodItem, it.amountInGrams)
+                            },
+                            servings = initialServings
+                        )
+
+                        _uiState.update {
+                            it.copy(
+                                recipe = recipe,
+                                originalIngredients = ingredients,
+                                scaledIngredients = initialScaled,
+                                currentServings = initialServings,
+                                selectedMainIngredientId = defaultMainIngredient,
+                                targetIngredientWeightInput = if (defaultWeight > 0) defaultWeight.toInt().toString() else "",
+                                macros = initialMacros,
+                                isLoading = false
+                            )
+                        }
+                    } else {
+                        val servingsToUse = _uiState.value.currentServings
+                        val updatedScaled = scaleRecipeIngredientsUseCase.scaleByServings(
+                            ingredients = ingredients,
+                            baseServings = recipe.baseServings,
+                            targetServings = servingsToUse
+                        )
+                        val updatedMacros = calculateRecipeMacrosUseCase(
+                            ingredients = updatedScaled.map {
+                                RecipeIngredientWithFoodItem(recipeId, it.foodItem, it.amountInGrams)
+                            },
+                            servings = servingsToUse
+                        )
+                        _uiState.update {
+                            it.copy(
+                                recipe = recipe,
+                                originalIngredients = ingredients,
+                                scaledIngredients = updatedScaled,
+                                macros = updatedMacros
+                            )
+                        }
                     }
                 }
             }
+        }
+    }
+
+    fun toggleFavorite() {
+        val currentRecipe = _uiState.value.recipe ?: return
+        val newFav = !currentRecipe.isFavorite
+        _uiState.update { it.copy(recipe = currentRecipe.copy(isFavorite = newFav)) }
+        viewModelScope.launch {
+            recipeRepository.updateFavoriteStatus(currentRecipe.id, newFav)
         }
     }
 

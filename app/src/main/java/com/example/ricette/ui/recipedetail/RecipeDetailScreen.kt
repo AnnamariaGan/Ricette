@@ -1,5 +1,8 @@
 package com.example.ricette.ui.recipedetail
 
+import android.app.Activity
+import android.view.WindowManager
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,16 +12,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,6 +40,7 @@ import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -39,37 +50,33 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import android.app.Activity
-import android.view.WindowManager
-import androidx.compose.foundation.clickable
-import androidx.compose.material3.Button
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextDecoration
-import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ricette.domain.model.ScaledIngredient
 import com.example.ricette.ui.components.MacroCard
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeDetailScreen(
     onBackClick: () -> Unit,
+    onEditClick: (Long) -> Unit = {},
     viewModel: RecipeDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -98,6 +105,26 @@ fun RecipeDetailScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Indietro"
+                        )
+                    }
+                },
+                actions = {
+                    val recipe = uiState.recipe
+                    val isFav = recipe?.isFavorite == true
+                    if (recipe != null) {
+                        IconButton(onClick = { onEditClick(recipe.id) }) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Modifica Ricetta",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                    IconButton(onClick = viewModel::toggleFavorite) {
+                        Icon(
+                            imageVector = if (isFav) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = if (isFav) "Rimuovi dai preferiti" else "Aggiungi ai preferiti",
+                            tint = if (isFav) Color.Red else MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
                 },
@@ -151,6 +178,68 @@ fun RecipeDetailScreen(
                         CookingTimerCard(defaultMinutes = recipe.prepTimeMinutes.coerceAtLeast(1))
                     }
 
+                    // Recipe Info & Servings Selector Card
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text(
+                                    text = "Tempo",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "${recipe.prepTimeMinutes} min",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    text = "Porzioni (Base: ${recipe.baseServings})",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    FilledTonalIconButton(
+                                        onClick = { viewModel.decrementServings() },
+                                        enabled = uiState.currentServings > 1,
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Text("-", style = MaterialTheme.typography.titleLarge)
+                                    }
+                                    Text(
+                                        text = uiState.currentServings.toString(),
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 4.dp)
+                                    )
+                                    FilledTonalIconButton(
+                                        onClick = { viewModel.incrementServings() },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Text("+", style = MaterialTheme.typography.titleLarge)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Macro summary card
                     uiState.macros?.let { macros ->
                         MacroCard(macros = macros)
@@ -177,6 +266,10 @@ fun RecipeDetailScreen(
                     IngredientsCard(
                         ingredients = uiState.scaledIngredients,
                         checkedMap = checkedIngredients,
+                        currentServings = uiState.currentServings,
+                        baseServings = recipe.baseServings,
+                        onIncrementServings = { viewModel.incrementServings() },
+                        onDecrementServings = { viewModel.decrementServings() },
                         forceGrams = isBaking,
                         onToggleCheck = { id -> checkedIngredients[id] = !(checkedIngredients[id] ?: false) }
                     )
@@ -211,6 +304,17 @@ fun RecipeDetailScreen(
                             }
                         }
                     }
+
+                    // Edit button at the bottom
+                    OutlinedButton(
+                        onClick = { onEditClick(recipe.id) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Modifica Ricetta", fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
@@ -238,7 +342,7 @@ private fun ScalingControlCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = "Scala Ricetta",
+                text = "Opzioni Avanzate Scaling",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
@@ -265,45 +369,13 @@ private fun ScalingControlCard(
             Spacer(modifier = Modifier.height(16.dp))
 
             if (!isScaleByMainIngredient) {
-                // Serving selector
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Porzioni:",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium
-                    )
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilledTonalIconButton(
-                            onClick = onDecrementServings,
-                            enabled = currentServings > 1
-                        ) {
-                            Text("-", style = MaterialTheme.typography.titleLarge)
-                        }
-
-                        Text(
-                            text = "$currentServings",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-
-                        FilledTonalIconButton(onClick = onIncrementServings) {
-                            Text("+", style = MaterialTheme.typography.titleLarge)
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
                 // Quick serving buttons
+                Text(
+                    text = "Selezione rapida porzioni:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -314,7 +386,7 @@ private fun ScalingControlCard(
                             modifier = Modifier.weight(1f),
                             contentPadding = ButtonDefaults.TextButtonContentPadding
                         ) {
-                            Text("$servings")
+                            Text(servings.toString())
                         }
                     }
                 }
@@ -383,23 +455,64 @@ private fun ScalingControlCard(
 private fun IngredientsCard(
     ingredients: List<ScaledIngredient>,
     checkedMap: Map<Long, Boolean>,
+    currentServings: Int,
+    baseServings: Int,
+    onIncrementServings: () -> Unit,
+    onDecrementServings: () -> Unit,
     forceGrams: Boolean,
     onToggleCheck: (Long) -> Unit
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Ingredienti", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("Tocca per spuntare", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Ingredienti", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = if (currentServings != baseServings) "Porzioni: $currentServings (base: $baseServings)" else "Porzioni: $currentServings",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    FilledTonalIconButton(
+                        onClick = onDecrementServings,
+                        enabled = currentServings > 1,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Text("-", style = MaterialTheme.typography.titleMedium)
+                    }
+                    Text(
+                        text = currentServings.toString(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 4.dp)
+                    )
+                    FilledTonalIconButton(
+                        onClick = onIncrementServings,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Text("+", style = MaterialTheme.typography.titleMedium)
+                    }
+                }
             }
             Spacer(modifier = Modifier.height(8.dp))
             ingredients.forEach { ingredient ->
                 val isChecked = checkedMap[ingredient.foodItem.id] == true
-                val amt = if (forceGrams || ingredient.foodItem.unitLabel == "g") {
+                val amt = if (forceGrams || (ingredient.foodItem.unitLabel == "g")) {
                     if (ingredient.amountInGrams % 1.0 == 0.0) "${ingredient.amountInGrams.toInt()} g" else "${ingredient.amountInGrams} g"
                 } else ingredient.foodItem.formatAmount(ingredient.amountInGrams)
                 Row(
-                    modifier = Modifier.fillMaxWidth().clickable { onToggleCheck(ingredient.foodItem.id) }.padding(vertical = 4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onToggleCheck(ingredient.foodItem.id) }
+                        .padding(vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {

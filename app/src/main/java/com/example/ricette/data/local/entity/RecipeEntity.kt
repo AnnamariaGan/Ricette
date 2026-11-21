@@ -13,7 +13,8 @@ data class RecipeEntity(
     val baseServings: Int,
     val prepTimeMinutes: Int,
     val instructions: String,
-    val personalNotes: String
+    val personalNotes: String,
+    val isFavorite: Boolean = false,
 ) {
     fun toDomain(): Recipe = Recipe(
         id = id,
@@ -22,7 +23,8 @@ data class RecipeEntity(
         baseServings = baseServings,
         prepTimeMinutes = prepTimeMinutes,
         instructions = instructions,
-        personalNotes = personalNotes
+        personalNotes = personalNotes,
+        isFavorite = isFavorite,
     )
 
     companion object {
@@ -33,7 +35,8 @@ data class RecipeEntity(
             baseServings = domain.baseServings,
             prepTimeMinutes = domain.prepTimeMinutes,
             instructions = domain.instructions,
-            personalNotes = domain.personalNotes
+            personalNotes = domain.personalNotes,
+            isFavorite = domain.isFavorite,
         )
     }
 }

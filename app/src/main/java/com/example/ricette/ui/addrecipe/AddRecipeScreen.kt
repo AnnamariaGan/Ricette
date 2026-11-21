@@ -2,6 +2,7 @@ package com.example.ricette.ui.addrecipe
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -74,7 +75,12 @@ fun AddRecipeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Nuova Ricetta", fontWeight = FontWeight.Bold) },
+                title = {
+                    Text(
+                        text = if (uiState.isEditMode) "Modifica Ricetta" else "Nuova Ricetta",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -90,7 +96,7 @@ fun AddRecipeScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Check,
-                            contentDescription = "Salva Ricetta"
+                            contentDescription = if (uiState.isEditMode) "Salva Modifiche" else "Salva Ricetta"
                         )
                     }
                 },
@@ -343,7 +349,10 @@ fun AddRecipeScreen(
                     .height(50.dp),
                 enabled = !uiState.isSaving
             ) {
-                Text("Salva Ricetta", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = if (uiState.isEditMode) "Salva Modifiche" else "Salva Ricetta",
+                    style = MaterialTheme.typography.titleMedium
+                )
             }
         }
     }
@@ -367,8 +376,8 @@ fun AddRecipeScreen(
             fat = uiState.newFoodItemFat,
             isDairyFree = uiState.newFoodItemIsDairyFree,
             isGlutenFree = uiState.newFoodItemIsGlutenFree,
-            onFieldChange = { name, kcal, carbs, protein, fat, dairy, gluten ->
-                viewModel.onNewFoodItemFieldChange(name, kcal, carbs, protein, fat, dairy, gluten)
+            onFieldChange = { name, kcal, carbs, prot, fat, df, gf ->
+                viewModel.onNewFoodItemFieldChange(name, kcal, carbs, prot, fat, df, gf)
             },
             onSave = { viewModel.saveCustomFoodItem() },
             onDismiss = { viewModel.closeCreateFoodItemDialog() }
@@ -394,10 +403,11 @@ private fun CategoryDropdown(
             value = category,
             onValueChange = onCategoryChange,
             label = { Text("Categoria") },
+            readOnly = true,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .fillMaxWidth()
-                .menuAnchor()
+                .menuAnchor(androidx.compose.material3.ExposedDropdownMenuAnchorType.PrimaryNotEditable)
         )
 
         ExposedDropdownMenu(
@@ -424,7 +434,7 @@ private fun SelectFoodItemDialog(
     onDismiss: () -> Unit
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    val filtered = remember(foodItems, searchQuery) {
+    val filteredItems = remember(searchQuery, foodItems) {
         if (searchQuery.isBlank()) foodItems
         else foodItems.filter { it.name.contains(searchQuery, ignoreCase = true) }
     }
@@ -433,41 +443,98 @@ private fun SelectFoodItemDialog(
         onDismissRequest = onDismiss,
         title = { Text("Seleziona Ingrediente") },
         text = {
-            Column(modifier = Modifier.height(350.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(350.dp)
+            ) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = { Text("Cerca alimento") },
+                    placeholder = { Text("Cerca alimento...") },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Cancella")
+                            }
+                        }
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(filtered, key = { it.id }) { item ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelect(item) }
-                                .padding(vertical = 10.dp, horizontal = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(item.name, fontWeight = FontWeight.Medium)
-                                Text(
-                                    "${item.kcalPer100g.toInt()} kcal | C:${item.carbsPer100g} P:${item.proteinPer100g} F:${item.fatPer100g}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                if (filteredItems.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Nessun alimento trovato",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(filteredItems) { item ->
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSelect(item) },
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = item.name,
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                            if (item.isDairyFree) {
+                                                Text(
+                                                    text = "🥛❌ DF",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                            if (item.isGlutenFree) {
+                                                Text(
+                                                    text = "🌾❌ GF",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.secondary
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Text(
+                                        text = "${item.kcalPer100g.toInt()} kcal",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
         },
-        confirmButton = {
+        confirmButton = {},
+        dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("Chiudi")
             }
@@ -484,16 +551,24 @@ private fun CreateCustomFoodItemDialog(
     fat: String,
     isDairyFree: Boolean,
     isGlutenFree: Boolean,
-    onFieldChange: (String?, String?, String?, String?, String?, Boolean?, Boolean?) -> Unit,
+    onFieldChange: (
+        name: String?,
+        kcal: String?,
+        carbs: String?,
+        protein: String?,
+        fat: String?,
+        isDairyFree: Boolean?,
+        isGlutenFree: Boolean?
+    ) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Crea Nuovo Ingrediente") },
+        title = { Text("Nuovo Alimento") },
         text = {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+                modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 OutlinedTextField(

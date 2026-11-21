@@ -19,11 +19,17 @@ interface RecipeDao {
     @Query("SELECT * FROM recipes WHERE id = :id")
     fun getRecipeById(id: Long): Flow<RecipeEntity?>
 
+    @Query("SELECT * FROM recipes WHERE isFavorite = 1 ORDER BY title ASC")
+    fun getFavoriteRecipes(): Flow<List<RecipeEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRecipe(recipe: RecipeEntity): Long
 
     @Update
     suspend fun updateRecipe(recipe: RecipeEntity)
+
+    @Query("UPDATE recipes SET isFavorite = :isFavorite WHERE id = :recipeId")
+    suspend fun updateFavoriteStatus(recipeId: Long, isFavorite: Boolean)
 
     @Delete
     suspend fun deleteRecipe(recipe: RecipeEntity)
